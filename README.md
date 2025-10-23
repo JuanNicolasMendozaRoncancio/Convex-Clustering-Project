@@ -4,6 +4,7 @@ Thanks to my academic performance at UNAL (National University of Colombia), I h
 
 This repository is organized as follows:
 
+```
 |
 |
 |-- Readme
@@ -17,3 +18,4 @@ This repository is organized as follows:
 |
 -- Code
       |-- Here you'll find the project’s code
+```
