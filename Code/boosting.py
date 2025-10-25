@@ -50,7 +50,6 @@ class Boosting:
 
         return b
 
-
     def FS_Boost(self, numiter=100, epsilon=0.1):
         """
         FS-Boost algorithm for linear regression boosting.
@@ -76,7 +75,6 @@ class Boosting:
                 b[j_k] +=  epsilon * s
 
         return b
-
 
     def R_FS(self, numiter=100, epsilon=0.1, delta=1):
         """
@@ -110,7 +108,6 @@ class Boosting:
                 b[j_k] += epsilon * s
 
         return b
-
 
     def Path_R_FS(self, numiter=100, epsilon=0.1, delta_list=[0.001, 0.01, 0.1, 1]):
         """
