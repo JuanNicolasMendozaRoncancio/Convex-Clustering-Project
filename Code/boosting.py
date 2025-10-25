@@ -1,134 +1,173 @@
-# La idea es implementar un algoritmo de boosting simple desde cero en Python basado en el paper
-# "A new perpective on Boosting un linear Refression via" en la carpeta de Papers.
-# Para esto tenemos entonces: Una matriz X de datos en R^{nxp}, un vector de respuestas y en R^{n}
-# Y un coeficiente de regresión b en R^{p}.
+# The goal is to implement a simple boosting algorithm from scratch in Python based on the paper
+# "A new perspective on Boosting in Linear Regression" in the Papers folder.
+# For this we have: A data matrix X in R^{n x p}, a response vector y in R^{n}
+# and a regression coefficient b in R^{p}.
 
-# Asumimos que los features han sido centrados y todos tienen norma 2 igual a 1. y que y tambien ha sido
-# centrado para tener promedio 0.
+# We assume the features have been centered and all have L2 norm equal to 1, and that y has also been
+# centered to have zero mean.
 
-# Buscamos entonces encontrar b tal que y = Xb, así que definimos el residuo r = y - Xb.
+# We aim to find b such that y = Xb, so we define the residual r = y - Xb.
 
 import numpy as np
 
+class Boosting:
+    def __init__(self, X, y):
+        """
+        Initialize the Boosting class with data and response.
+        
+        Parameters:
+            X: Data matrix of size (n, p)
+            y: Response vector of size (n,)
+        """
 
-def LS_Boost(X,y,numiter= 100, epsilon= 0.1):
-    """
-    Algoritmo de boosting para regresión lineal LS-Boost.
-    Parámetros:
-        X: Matriz de datos de tamaño (n,p).
-        y: Vector de respuestas de tamaño (n,).
-        numiter: Número de iteraciones del algoritmo, por defecto 100.
-        epsilon: Tasa de aprendizaje, por defecto 0.1.
-    Retorna:
-        b: Vector de coeficientes de regresión de tamaño (p,).
-    """
-    if epsilon <= 0:
-        raise ValueError("El parámetro epsilon debe ser positivo.")
-    else:
-        r,b = y, np.zeros(X.shape[1])
-        for it in range(numiter):
-            u_m = [np.dot(X[:,m],r)/np.linalg.norm(X[:,m])**2 for m in range(X.shape[1])]
-            res = [np.sum((r - u_m[m]*X[:,m])**2) for m in range(X.shape[1])]
-            j_k = np.argmin(res) 
+        self.data = X
+        self.response = y
 
-            r = r - epsilon*X[:,j_k]*u_m[j_k]
-            b[j_k] = b[j_k] + epsilon*u_m[j_k]
+    def LS_Boost(self, numiter=100, epsilon=0.1):
+        """
+        LS-Boost algorithm for linear regression boosting.
+        Parameters:
+            X: Data matrix of size (n, p).
+            y: Response vector of size (n,).
+            numiter: Number of algorithm iterations, default 100.
+            epsilon: Learning rate, default 0.1.
+        Returns:
+            b: Regression coefficient vector of size (p,).
+        """
+        if epsilon <= 0:
+            raise ValueError("The epsilon parameter must be positive.")
+        else:
+            r, b = self.response, np.zeros(self.data.shape[1])
+            for it in range(numiter+1):
+                u_m = [np.dot(self.data[:, m], r) / np.linalg.norm(self.data[:, m])**2 
+                       for m in range(self.data.shape[1])]
+                res = [np.sum((r - u_m[m] * self.data[:, m])**2) 
+                       for m in range(self.data.shape[1])]
+                j_k = np.argmin(res)
 
-    return b
+                r = r - epsilon * self.data[:, j_k] * u_m[j_k]
+                b[j_k] = b[j_k] + epsilon * u_m[j_k]
 
-
-def FS_Boost(X,y,numiter = 100, epsilon = 0.1):
-    """
-    Algoritmo de boosting para regresión lineal FS-Boost.
-    Parámetros:
-        X: Matriz de datos de tamaño (n,p).
-        y: Vector de respuestas de tamaño (n,).
-        numiter: Número de iteraciones del algoritmo, por defecto 100.
-        epsilon: Tasa de aprendizaje, por defecto 0.1.
-    Retorna:
-        b: Vector de coeficientes de regresión de tamaño (p,).
-    """
-    if epsilon <= 0:
-        raise ValueError("El parámetro epsilon debe ser positivo.")
-    else:
-        r,b = y, np.zeros(X.shape[1])
-        for it in range(numiter):
-            corr = [abs(np.dot(r,X[:,m])) for m in range(X.shape[1])]
-            j_k = np.argmax(corr)
-
-            s = np.sign(np.dot(r,X[:,j_k]))
-            r = r - epsilon*s*X[:,j_k]
-            b[j_k] = b[j_k] + epsilon*s
-
-    return b
+        return b
 
 
-def R_FS(X,y,numiter = 100, epsilon = 0.1, delta = 1):
-    """
-    Algoritmo de boosting para regresión lineal R-FS.
-    Parámetros:
-        X: Matriz de datos de tamaño (n,p).
-        y: Vector de respuestas de tamaño (n,).
-        numiter: Número de iteraciones del algoritmo, por defecto 100.
-        epsilon: Tasa de aprendizaje, por defecto 0.1.
-        delta: Parámetro de regularización, por defecto 1.
-    Retorna:
-        b: Vector de coeficientes de regresión de tamaño (p,).    
-    """
-    if epsilon <= 0:
-        raise ValueError("El parámetro epsilon debe ser positivo.")
-    elif delta <= 0:
-        raise ValueError("El parámetro delta debe ser positivo.")
-    elif epsilon >= delta:
-        raise ValueError("El parámetro epsilon debe ser menor que delta.")
-    else:
-        r,b =  y,np.zeros(X.shape[1])
-        for it in range(numiter+1):
-            corr = [abs(np.dot(r,X[:,m])) for m in range(X.shape[1])]
-            j_k = np.argmax(corr)
+    def FS_Boost(self, numiter=100, epsilon=0.1):
+        """
+        FS-Boost algorithm for linear regression boosting.
+        Parameters:
+            X: Data matrix of size (n, p).
+            y: Response vector of size (n,).
+            numiter: Number of algorithm iterations, default 100.
+            epsilon: Learning rate, default 0.1.
+        Returns:
+            b: Regression coefficient vector of size (p,).
+        """
+        if epsilon <= 0:
+            raise ValueError("The epsilon parameter must be positive.")
+        else:
+            r, b = self.response, np.zeros(self.data.shape[1])
+            for it in range(numiter+1):
+                corr = [abs(np.dot(r, self.data[:, m])) 
+                        for m in range(self.data.shape[1])]
+                j_k = np.argmax(corr)
 
-            s = np.sign(np.dot(r,X[:,j_k]))
-            r = r - epsilon*(s*X[:,j_k] + (1/delta)*(r-y))
-            b = (1 - epsilon/delta)*b
-            b[j_k] += epsilon*s
+                s = np.sign(np.dot(r, self.data[:, j_k]))
+
+                r = r - epsilon * s * self.data[:, j_k]
+                b[j_k] = b[j_k] + epsilon * s
+
+        return b
+
+
+    def R_FS(self, numiter=100, epsilon=0.1, delta=1):
+        """
+        R-FS boosting algorithm for linear regression.
+        Parameters:
+            X: Data matrix of size (n, p).
+            y: Response vector of size (n,).
+            numiter: Number of algorithm iterations, default 100.
+            epsilon: Learning rate, default 0.1.
+            delta: Regularization parameter, default 1.
+        Returns:
+            b: Regression coefficient vector of size (p,).    
+        """
+        if epsilon <= 0:
+            raise ValueError("The epsilon parameter must be positive.")
+        elif delta <= 0:
+            raise ValueError("The delta parameter must be positive.")
+        elif epsilon >= delta:
+            raise ValueError("The epsilon parameter must be less than delta.")
+        else:
+            r, b = self.response, np.zeros(self.data.shape[1])
+            for it in range(numiter + 1):
+
+                corr = [abs(np.dot(r, self.data[:, m])) 
+                        for m in range(self.data.shape[1])]
+                j_k = np.argmax(corr)
+
+                s = np.sign(np.dot(r, self.data[:, j_k]))
+
+                r = r - epsilon * (s * self.data[:, j_k] + (1 / delta) * (r - self.response))
+                b = (1 - epsilon / delta) * b
+                b[j_k] += epsilon * s
+
+        return b
+
+
+    def Path_R_FS(self, numiter=100, epsilon=0.1, delta_list=[0.001, 0.01, 0.1, 1]):
+        """
+        R-FS boosting algorithm with regularization path for linear regression.
+        Parameters: 
+            X: Data matrix of size (n, p).
+            y: Response vector of size (n,).
+            numiter: Number of algorithm iterations, default 100.
+            epsilon: Learning rate, default 0.1.
+            delta_list: List of regularization values for each iteration, must have length numiter+1.
+        Returns:
+            b: Regression coefficient vector of size (p,).
+        """
+        if not isinstance(delta_list, list):
+            raise ValueError("The delta_list parameter must be a list of bounded positive values.")
+        if len(delta_list) != numiter + 1:
+            raise ValueError(f"delta_list must contain {numiter + 1} values.")
+        if any(d == 0 for d in delta_list):
+            raise ValueError("All values in delta_list must be non-zero.")
+        if epsilon <= 0:
+            raise ValueError("The epsilon parameter must be positive.")
+        if epsilon > np.min(delta_list):
+            raise ValueError("The epsilon parameter must be less than the minimum value in delta_list.")
+        else:
             
-    return b
+            delta_list = np.sort(np.abs(np.array(delta_list)))
+            r, b = self.response, np.zeros(self.data.shape[1])
 
+            for it in range(numiter + 1):
+                corr = [abs(np.dot(r, self.data[:, m])) 
+                        for m in range(self.data.shape[1])]
+                j_k = np.argmax(corr)
 
-def Path_R_FS(X,y,numiter = 100,epsilon = 0.1, delta_list = [0.001,0.01,0.1,1]):
-    """
-    Algoritmo de boosting para regresión lineal R-FS con ruta de regularización.
-    Parámetros: 
-        X: Matriz de datos de tamaño (n,p).
-        y: Vector de respuestas de tamaño (n,).
-        numiter: Número de iteraciones del algoritmo, por defecto 100.
-        epsilon: Tasa de aprendizaje, por defecto 0.1.
-        delta_list: Lista de valores de regularización para cada iteración, debe tener longitud numiter+1.
-    Retorna:
-        b: Vector de coeficientes de regresión de tamaño (p,).
-    """
-    if not isinstance(delta_list, list):
-        raise ValueError("El parámetro delta_list debe ser una lista de valores positivos acotados.")
-    if len(delta_list) != numiter+1:
-        raise ValueError(f"delta_list debe contener {numiter+1} valores.")
-    if any(d == 0 for d in delta_list):
-        raise ValueError("Todos los valores en delta_list deben ser no nulos.")
-    if epsilon <= 0:
-        raise ValueError("El parámetro epsilon debe ser positivo.")
-    if epsilon > np.min(delta_list):
-        raise ValueError("El parámetro epsilon debe ser menor que el mínimo valor en delta_list.")
-    else:
-        delta_list = np.sort(np.abs(np.array(delta_list)))
-        r,b =  y,np.zeros(X.shape[1])
+                s = np.sign(np.dot(r, self.data[:, j_k]))
 
-        for it in range(numiter+1):
-            corr = [abs(np.dot(r,X[:,m])) for m in range(X.shape[1])]
-            j_k = np.argmax(corr)
+                r = r - epsilon * (s * self.data[:, j_k] + (1 / delta_list[it]) * (r - self.response))
+                b = (1 - epsilon / delta_list[it]) * b
+                b[j_k] += epsilon * s
 
-            s = np.sign(np.dot(r,X[:,j_k]))
-            r = r - epsilon*(s*X[:,j_k] + (1/delta_list[it])*(r-y))
-            b = (1 - epsilon/delta_list[it])*b
-            b[j_k] += epsilon*s
-
-    return b
-
+        return b
+    
+    def evaluation(self, b, verbose=True):
+        """
+        Evaluate the model by computing the mean squared error (MSE) between the predicted and actual response.
+        Parameters:
+            b: Regression coefficient vector of size (p,) and the regression coefficients.
+            verbose: If True, prints the MSE value and the regression equation.
+        Returns:
+            mse: Mean squared error value.
+        """
+        predictions = np.dot(self.data, b)
+        mse = np.mean((self.response - predictions) ** 2)
+        if verbose:
+            print(f"The Mean Squared Error is: {mse} \n")
+            print(f"The regression coefficients are: {b} \n")
+            return mse,b
+        else:
+            return mse
