@@ -1,7 +1,8 @@
+# test_boosting.py
 import numpy as np
+from boosting import Boosting
 
-X = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
-
-print(type(X[:, 0]))
-
-print("hola")
+# Generar datos de ejemplo
+r = np.array([3, -0.5, 2, 7])
+print(r.shape)
+print(r[:,None].shape)

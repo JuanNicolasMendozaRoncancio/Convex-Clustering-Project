@@ -39,14 +39,14 @@ class Boosting:
         else:
             r, b = self.response, np.zeros(self.data.shape[1])
             for it in range(numiter+1):
-                u_m = [np.dot(self.data[:, m], r) / np.linalg.norm(self.data[:, m])**2 
+                u_m = [np.dot(self.data[:, m], r) 
                        for m in range(self.data.shape[1])]
                 res = [np.sum((r - u_m[m] * self.data[:, m])**2) 
                        for m in range(self.data.shape[1])]
                 j_k = np.argmin(res)
 
-                r = r - epsilon * self.data[:, j_k] * u_m[j_k]
-                b[j_k] = b[j_k] + epsilon * u_m[j_k]
+                r -= epsilon * self.data[:, j_k] * u_m[j_k]
+                b[j_k] += epsilon * u_m[j_k]
 
         return b
 
@@ -66,15 +66,14 @@ class Boosting:
             raise ValueError("The epsilon parameter must be positive.")
         else:
             r, b = self.response, np.zeros(self.data.shape[1])
-            for it in range(numiter+1):
-                corr = [abs(np.dot(r, self.data[:, m])) 
-                        for m in range(self.data.shape[1])]
+            for it in range(numiter):
+                corr = np.abs(self.data.T @ r)
                 j_k = np.argmax(corr)
 
                 s = np.sign(np.dot(r, self.data[:, j_k]))
 
-                r = r - epsilon * s * self.data[:, j_k]
-                b[j_k] = b[j_k] + epsilon * s
+                r -=  epsilon * s * self.data[:, j_k]
+                b[j_k] +=  epsilon * s
 
         return b
 
@@ -98,16 +97,15 @@ class Boosting:
         elif epsilon >= delta:
             raise ValueError("The epsilon parameter must be less than delta.")
         else:
-            r, b = self.response, np.zeros(self.data.shape[1])
-            for it in range(numiter + 1):
+            r, b = self.response.copy(), np.zeros(self.data.shape[1])
+            for it in range(numiter):
 
-                corr = [abs(np.dot(r, self.data[:, m])) 
-                        for m in range(self.data.shape[1])]
+                corr = np.abs(self.data.T @ r)
                 j_k = np.argmax(corr)
 
                 s = np.sign(np.dot(r, self.data[:, j_k]))
 
-                r = r - epsilon * (s * self.data[:, j_k] + (1 / delta) * (r - self.response))
+                r -= epsilon * (s * self.data[:, j_k] + (1 / delta) * (r - self.response))
                 b = (1 - epsilon / delta) * b
                 b[j_k] += epsilon * s
 
@@ -126,8 +124,8 @@ class Boosting:
         Returns:
             b: Regression coefficient vector of size (p,).
         """
-        if not isinstance(delta_list, list):
-            raise ValueError("The delta_list parameter must be a list of bounded positive values.")
+        if not isinstance(delta_list, (list, np.ndarray)):
+            raise ValueError("The delta_list parameter must be a list or numpy array of bounded positive values.")
         if len(delta_list) != numiter + 1:
             raise ValueError(f"delta_list must contain {numiter + 1} values.")
         if any(d == 0 for d in delta_list):
@@ -137,18 +135,17 @@ class Boosting:
         if epsilon > np.min(delta_list):
             raise ValueError("The epsilon parameter must be less than the minimum value in delta_list.")
         else:
-            
+
             delta_list = np.sort(np.abs(np.array(delta_list)))
-            r, b = self.response, np.zeros(self.data.shape[1])
+            r, b = self.response.copy(), np.zeros(self.data.shape[1])
 
             for it in range(numiter + 1):
-                corr = [abs(np.dot(r, self.data[:, m])) 
-                        for m in range(self.data.shape[1])]
+                corr = np.abs(self.data.T @ r)
                 j_k = np.argmax(corr)
 
                 s = np.sign(np.dot(r, self.data[:, j_k]))
 
-                r = r - epsilon * (s * self.data[:, j_k] + (1 / delta_list[it]) * (r - self.response))
+                r -= epsilon * (s * self.data[:, j_k] + (1 / delta_list[it]) * (r - self.response))
                 b = (1 - epsilon / delta_list[it]) * b
                 b[j_k] += epsilon * s
 
