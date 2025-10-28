@@ -37,7 +37,7 @@ class Boosting:
         if epsilon <= 0:
             raise ValueError("The epsilon parameter must be positive.")
         else:
-            r, b = self.response, np.zeros(self.data.shape[1])
+            r, b = self.response.copy(), np.zeros(self.data.shape[1])
             for it in range(numiter+1):
                 u_m = [np.dot(self.data[:, m], r) 
                        for m in range(self.data.shape[1])]
@@ -64,7 +64,7 @@ class Boosting:
         if epsilon <= 0:
             raise ValueError("The epsilon parameter must be positive.")
         else:
-            r, b = self.response, np.zeros(self.data.shape[1])
+            r, b = self.response.copy(), np.zeros(self.data.shape[1])
             for it in range(numiter):
                 corr = np.abs(self.data.T @ r)
                 j_k = np.argmax(corr)
