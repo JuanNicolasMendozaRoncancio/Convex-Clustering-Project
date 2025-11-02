@@ -221,3 +221,177 @@ def ADMMgeneral(X, edges, weights, gamma, nu=1,
 
     return U, V, lambda_
 
+def _project_dual_ball(z, radius, norm_type):
+    """
+    Project vector z (p,) onto the ball {u: ||u||_dual <= radius}.
+    norm_type is the primal norm used in the penalty ('L2' or 'L1').
+    - If primal is L2, dual is L2 -> Euclidean ball.
+    - If primal is L1, dual is L_inf -> clip to [-radius, radius].
+    """
+    if radius < 0:
+        raise ValueError("radius must be non-negative")
+
+    if norm_type == 'L2':
+        normz = np.linalg.norm(z)
+        if normz <= radius:
+            return z
+        else:
+            return (radius / normz) * z
+    elif norm_type == 'L1':
+        # dual is L_inf -> clip each component
+        return np.clip(z, -radius, radius)
+    else:
+        raise ValueError("Unsupported norm_type for projection. Use 'L2' or 'L1'.") 
+
+def AMA(X, gamma, edges=None, weights=None, W=None, nu=None,
+        max_iter=1000, tol=1e-5, norm_type='L2', 
+        accelerate=False, verbose=False):
+    """
+     AMA (alternating minimization algorithm) for convex clustering.
+
+    Parameters
+    ----------
+    X : array_like, shape (p, n)
+        Data matrix (p features, n points).
+    gamma : float
+        Regularization parameter.
+    edges : list of (i,j) pairs, optional
+        Edge list (i < j). If None and W provided, will be built from W.
+    weights : array_like of length m, optional
+        Weights for edges (must match edges). If None and W provided, built from W or set to ones.
+    W : (n,n) array optional
+        Weight matrix (used only if edges is None).
+    nu : float, optional
+        Step size for the projected gradient on the dual. Default: 1/n (safe choice per paper).
+    max_iter : int
+    tol : float
+        Tolerance on duality gap (primal - dual).
+    norm_type : 'L2' or 'L1'
+        Primal norm used in the penalty; determines the dual-ball projection.
+    accelerate : bool
+        If True, run accelerated AMA (Nesterov) per Algorithm 3.
+    verbose : bool
+
+    Returns
+    -------
+    U : array (p, n)
+        Primal centroids.
+    lambda_ : array (p, m)
+        Dual variables per edge.
+    history : dict
+        Contains 'primal', 'dual', 'gap' lists per iteration.
+    """
+
+    p, n = X.shape
+    if edges is None:
+        if W is None:
+              # fully connected
+            print("Building fully connected graph with unit weights.")
+            edges = [(i, j) for i in range(n) for j in range(i+1, n)]
+            m = len(edges)
+            weights = np.ones(m, dtype=float)
+        else:
+            edges, weights = built_edges(W)
+            m = len(edges)
+    else:
+        m = len(edges)
+        if weights is None:
+            weights = np.ones(m, dtype=float)
+        else:
+            weights = np.array(weights, dtype=float)    
+    
+    if nu is None:
+        nu = 1.0 / n  # safe choice per paper
+
+    # Initialize variables
+    lambda_ = np.zeros((p, m))
+    U = X.copy()
+    history = {'primal': [], 'dual': [], 'gap': []}
+
+    def compute_delta(lambda_mat):
+        Delta = np.zeros((p, n), dtype=float)
+        for idx, (i, j) in enumerate(edges):
+            Delta[:, i] += lambda_mat[:, idx]
+            Delta[:, j] -= lambda_mat[:, idx]
+        return Delta
+
+    def primal_value(U_mat):
+        fit = 0.5 * np.sum((X - U_mat) ** 2)
+        pen = 0.0
+        for idx, (i, j) in enumerate(edges):
+            if norm_type == 'L2':
+                pen += weights[idx] * np.linalg.norm(U_mat[:, i] - U_mat[:, j])
+            elif norm_type == 'L1':
+                pen += weights[idx] * np.sum(np.abs(U_mat[:, i] - U_mat[:, j]))
+            else:
+                raise ValueError("Unsupported norm_type for primal objective")
+        return fit + gamma * pen
+
+    # helper dual objective D_gamma(lambda) (finite only if lambda feasible; we keep lambdas feasible via projection)
+    def dual_value(lambda_mat, Delta):
+        # D = -0.5 * sum_i ||Delta_i||^2 - sum_l <lambda_l, x_l1 - x_l2>
+        term1 = -0.5 * np.sum(Delta ** 2)
+        term2 = 0.0
+        for idx, (i, j) in enumerate(edges):
+            xdiff = X[:, i] - X[:, j]
+            term2 += np.dot(lambda_mat[:, idx], xdiff)
+        return term1 - term2
+    
+    # main loop
+    if accelerate:
+        # initialize accel variables
+        lambda_prev = lambda_.copy()
+        lambda_tilde = lambda_.copy()
+        alpha_prev = 1.0
+
+    for it in range(1, max_iter + 1):
+
+        Delta = compute_delta(lambda_)
+
+        U = X + Delta
+
+        lambda_new = np.zeros_like(lambda_)
+        for idx, (i, j) in enumerate(edges):
+
+            g = X[:, i] - X[:, j] + Delta[:, i] - Delta[:, j]
+
+            z = lambda_[:, idx] - nu * g
+
+            radius = gamma * weights[idx]
+
+            lambda_new = _project_dual_ball(z, radius, norm_type)
+
+        if accelerate:
+            # Nesterov acceleration
+
+            lambda_tilde_new = lambda_new.copy()
+            alpha_m = (1 + np.sqrt(1 + 4 * alpha_prev ** 2)) / 2
+
+            lambda_extra = lambda_tilde_new + (alpha_prev / alpha_m) * (lambda_tilde_new - lambda_tilde)
+
+            lambda_prev = lambda_.copy()
+            lambda_ = lambda_extra.copy()
+            lambda_tilde = lambda_tilde_new.copy()
+            alpha_prev = alpha_m
+        else:
+            lambda_ = lambda_new
+
+        # compute history: primal, dual and gap using new U and lambda_
+        Delta_post = compute_delta(lambda_)
+        primal = primal_value(U)
+        dual = dual_value(lambda_, Delta_post)
+        gap = primal - dual
+
+        history['primal'].append(primal)
+        history['dual'].append(dual)
+        history['gap'].append(gap)
+
+        if verbose and (it == 1 or it % 50 == 0):
+            print(f"AMA it {it:4d} | primal {primal:.6f} | dual {dual:.6f} | gap {gap:.3e}")
+
+        if gap < tol:
+            if verbose:
+                print(f"AMA converged at iter {it} | gap={gap:.2e}")
+            break
+
+    return U, lambda_, history
