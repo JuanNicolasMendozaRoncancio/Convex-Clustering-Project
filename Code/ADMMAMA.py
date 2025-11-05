@@ -104,7 +104,7 @@ def ADMMfullyconected(X,gamma,W = None, nu = 1,
     if W is None:
         weights = np.ones(m)
     else:
-        weights = np.array(W, dtype=np.float64)
+        weights = np.array([W[i,j] for (i,j) in edges], dtype=np.float64)
 
     # Initialize variables
     V = np.zeros((p, m))
@@ -131,6 +131,7 @@ def ADMMfullyconected(X,gamma,W = None, nu = 1,
             diff = U[:,i] - U[:,j] - (1/nu)*lambda_[:,idx]
             V[:,idx] = proximal(diff, 1, gamma*weights[idx]/nu, norm_type)
             lambda_[:,idx] += nu*(V[:,idx] - U[:,i] + U[:,j])
+            
 
         primal_sq = 0
         for idx, (i,j) in enumerate(edges):
@@ -155,7 +156,7 @@ def ADMMfullyconected(X,gamma,W = None, nu = 1,
                 print(f"Converged at iter {it}: primal_res={primal_residual:.2e}")
             break
 
-        return U, V, lambda_, history
+    return U, V, lambda_, history
 
 def ADMMgeneral(X, edges, weights, gamma, nu=1,
                 max_iter=1000, tol=1e-5,
@@ -179,7 +180,7 @@ def ADMMgeneral(X, edges, weights, gamma, nu=1,
     """
     p, n = X.shape
     m = len(edges)
-    Weigths = np.array(Weigths, dtype=np.float64)
+    weights = np.array(weights, dtype=np.float64)
 
     # Initialize variables
     V = np.zeros((p, m))
