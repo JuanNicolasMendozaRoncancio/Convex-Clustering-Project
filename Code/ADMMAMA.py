@@ -120,8 +120,8 @@ def ADMMfullyconected(X,gamma,W = None, nu = 1,
         # Compute yi
         for idx, (i,j) in enumerate(edges):
             vt = lambda_[:,idx] + nu*V[:,idx]
-            Y[:,i] -= vt
-            Y[:,j] += vt
+            Y[:,i] += vt
+            Y[:,j] -= vt
         
         # Update U
         U = (1/(1 + n*nu))*Y + (n*nu/(1 + n*nu))*np.repeat(xbar, n, axis=1)
@@ -245,49 +245,11 @@ def _project_dual_ball(z, radius, norm_type):
         raise ValueError("Unsupported norm_type for projection. Use 'L2' or 'L1'.") 
 
 def AMA(X, gamma, edges=None, weights=None, W=None, nu=None,
-        max_iter=1000, tol=1e-5, norm_type='L2', 
+        max_iter=1000, tol=1e-5, norm_type='L2',
         accelerate=False, verbose=False):
-    """
-     AMA (alternating minimization algorithm) for convex clustering.
-
-    Parameters
-    ----------
-    X : array_like, shape (p, n)
-        Data matrix (p features, n points).
-    gamma : float
-        Regularization parameter.
-    edges : list of (i,j) pairs, optional
-        Edge list (i < j). If None and W provided, will be built from W.
-    weights : array_like of length m, optional
-        Weights for edges (must match edges). If None and W provided, built from W or set to ones.
-    W : (n,n) array optional
-        Weight matrix (used only if edges is None).
-    nu : float, optional
-        Step size for the projected gradient on the dual. Default: 1/n (safe choice per paper).
-    max_iter : int
-    tol : float
-        Tolerance on duality gap (primal - dual).
-    norm_type : 'L2' or 'L1'
-        Primal norm used in the penalty; determines the dual-ball projection.
-    accelerate : bool
-        If True, run accelerated AMA (Nesterov) per Algorithm 3.
-    verbose : bool
-
-    Returns
-    -------
-    U : array (p, n)
-        Primal centroids.
-    lambda_ : array (p, m)
-        Dual variables per edge.
-    history : dict
-        Contains 'primal', 'dual', 'gap' lists per iteration.
-    """
-
     p, n = X.shape
     if edges is None:
         if W is None:
-              # fully connected
-            print("Building fully connected graph with unit weights.")
             edges = [(i, j) for i in range(n) for j in range(i+1, n)]
             m = len(edges)
             weights = np.ones(m, dtype=float)
@@ -299,22 +261,26 @@ def AMA(X, gamma, edges=None, weights=None, W=None, nu=None,
         if weights is None:
             weights = np.ones(m, dtype=float)
         else:
-            weights = np.array(weights, dtype=float)    
-    
-    if nu is None:
-        nu = 1.0 / n  # safe choice per paper
+            weights = np.array(weights, dtype=float)
 
-    # Initialize variables
-    lambda_ = np.zeros((p, m))
+    if nu is None:
+        nu = 1.0 / n
+
+    lambda_ = np.zeros((p, m), dtype=float)
     U = X.copy()
     history = {'primal': [], 'dual': [], 'gap': []}
 
+    # build incidence matrix Phi (m x n) once for fast delta computation
+    from scipy.sparse import lil_matrix
+    Phi = lil_matrix((m, n), dtype=float)
+    for idx, (i, j) in enumerate(edges):
+        Phi[idx, i] = 1.0
+        Phi[idx, j] = -1.0
+    Phi = Phi.tocsr()
+
     def compute_delta(lambda_mat):
-        Delta = np.zeros((p, n), dtype=float)
-        for idx, (i, j) in enumerate(edges):
-            Delta[:, i] += lambda_mat[:, idx]
-            Delta[:, j] -= lambda_mat[:, idx]
-        return Delta
+        # lambda_mat: (p, m) dense -> Delta = lambda_mat @ Phi  -> (p, n)
+        return lambda_mat.dot(Phi)
 
     def primal_value(U_mat):
         fit = 0.5 * np.sum((X - U_mat) ** 2)
@@ -328,48 +294,35 @@ def AMA(X, gamma, edges=None, weights=None, W=None, nu=None,
                 raise ValueError("Unsupported norm_type for primal objective")
         return fit + gamma * pen
 
-    # helper dual objective D_gamma(lambda) (finite only if lambda feasible; we keep lambdas feasible via projection)
     def dual_value(lambda_mat, Delta):
-        # D = -0.5 * sum_i ||Delta_i||^2 - sum_l <lambda_l, x_l1 - x_l2>
         term1 = -0.5 * np.sum(Delta ** 2)
         term2 = 0.0
         for idx, (i, j) in enumerate(edges):
             xdiff = X[:, i] - X[:, j]
             term2 += np.dot(lambda_mat[:, idx], xdiff)
         return term1 - term2
-    
-    # main loop
+
     if accelerate:
-        # initialize accel variables
         lambda_prev = lambda_.copy()
         lambda_tilde = lambda_.copy()
         alpha_prev = 1.0
 
     for it in range(1, max_iter + 1):
-
         Delta = compute_delta(lambda_)
-
         U = X + Delta
 
+        # PROJECTION STEP: build lambda_new columnwise (FIXED)
         lambda_new = np.zeros_like(lambda_)
         for idx, (i, j) in enumerate(edges):
-
             g = X[:, i] - X[:, j] + Delta[:, i] - Delta[:, j]
-
             z = lambda_[:, idx] - nu * g
-
             radius = gamma * weights[idx]
-
-            lambda_new = _project_dual_ball(z, radius, norm_type)
+            lambda_new[:, idx] = _project_dual_ball(z, radius, norm_type)
 
         if accelerate:
-            # Nesterov acceleration
-
             lambda_tilde_new = lambda_new.copy()
-            alpha_m = (1 + np.sqrt(1 + 4 * alpha_prev ** 2)) / 2
-
-            lambda_extra = lambda_tilde_new + (alpha_prev / alpha_m) * (lambda_tilde_new - lambda_tilde)
-
+            alpha_m = (1 + np.sqrt(1 + 4 * alpha_prev ** 2)) / 2.0
+            lambda_extra = lambda_tilde_new + (alpha_prev - 1.0) / alpha_m * (lambda_tilde_new - lambda_tilde)
             lambda_prev = lambda_.copy()
             lambda_ = lambda_extra.copy()
             lambda_tilde = lambda_tilde_new.copy()
@@ -377,7 +330,6 @@ def AMA(X, gamma, edges=None, weights=None, W=None, nu=None,
         else:
             lambda_ = lambda_new
 
-        # compute history: primal, dual and gap using new U and lambda_
         Delta_post = compute_delta(lambda_)
         primal = primal_value(U)
         dual = dual_value(lambda_, Delta_post)
