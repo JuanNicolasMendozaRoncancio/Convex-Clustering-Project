@@ -1,3 +1,11 @@
 # Code Folder
 
-This is the folder where all the codes of the project could be found.
+This is the folder where all the project code can be found.
+
+The code is organized as follows:
+
+* `boosting.py` contains the 4 boosting algorithms presented in the paper "A New Perspective on Linear Regression". This was the first module programmed.
+* In `ProveLasso VS R-FS VS Path-R-RFS`, one of the results from the paper "A New Perspective on Linear Perspective on Linear Regression" is verified: The $R-FS$ and $Path R-FS$ algorithms approximate the solution to a Lasso problem.
+* `ADMMAMA.py` implements the $2$ algorithms presented in the paper "Splitting Methods for Convex Clustering" to solve the Convex Clustering problem.
+* In this test `ProveADMM&AMA`, the `ADMMAMA.py` tests are run on a toy dataset.
+* In `tests`, general code tests are performed.

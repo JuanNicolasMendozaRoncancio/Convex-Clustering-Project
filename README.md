@@ -13,7 +13,7 @@ This repository is organized as follows:
 |
 |-- Papers
 |     |
-|     |-- Here you'll find the papers related to the project
+|     |-- Here you'll find the papers and draft related to the project
 |
 |
 |
