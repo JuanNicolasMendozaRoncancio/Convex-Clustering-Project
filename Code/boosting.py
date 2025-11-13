@@ -95,15 +95,17 @@ class Boosting:
         elif epsilon >= delta:
             raise ValueError("The epsilon parameter must be less than delta.")
         else:
-            r, b = self.response.copy(), np.zeros(self.data.shape[1])
+            data = self.data.copy().astype(np.float64)
+            response = self.response.copy().astype(np.float64)
+            r, b = response.copy(), np.zeros(data.shape[1], dtype=np.float64)
             for it in range(numiter):
 
-                corr = np.abs(self.data.T @ r)
+                corr = np.abs(data.T @ r)
                 j_k = np.argmax(corr)
 
-                s = np.sign(np.dot(r, self.data[:, j_k]))
+                s = np.sign(np.dot(r, data[:, j_k]))
 
-                r -= epsilon * (s * self.data[:, j_k] + (1 / delta) * (r - self.response))
+                r -= epsilon * (s * data[:, j_k] + (1 / delta) * (r - response))
                 b = (1 - epsilon / delta) * b
                 b[j_k] += epsilon * s
 
